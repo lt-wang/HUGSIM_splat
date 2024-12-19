@@ -31,6 +31,8 @@ def rasterization(
     Ks: Tensor,  # [C, 3, 3]
     width: int,
     height: int,
+    smts: Tensor = None, # [(C,) N, S]
+    flows: Tensor = None, # [(C,) N, 2]
     near_plane: float = 0.01,
     far_plane: float = 1e10,
     radius_clip: float = 0.0,
@@ -225,7 +227,7 @@ def rasterization(
     assert opacities.shape == (N,), opacities.shape
     assert viewmats.shape == (C, 4, 4), viewmats.shape
     assert Ks.shape == (C, 3, 3), Ks.shape
-    assert render_mode in ["RGB", "D", "ED", "RGB+D", "RGB+ED"], render_mode
+    # assert render_mode in ["RGB", "D", "ED", "RGB+D", "RGB+ED"], render_mode
 
     if sh_degree is None:
         # treat colors as post-activation values, should be in shape [N, D] or [C, N, D]
@@ -465,8 +467,24 @@ def rasterization(
         colors = depths[..., None]
         if backgrounds is not None:
             backgrounds = torch.zeros(C, 1, device=backgrounds.device)
-    else:  # RGB
+    elif render_mode in ["RGB+D+S", "RGB+ED+S"]:
+        colors = torch.cat((colors, depths[..., None], smts), dim=-1)
+        if backgrounds is not None:
+            backgrounds = torch.cat(
+                [backgrounds, torch.zeros(C, 1+smts.shape[-1], device=backgrounds.device)], dim=-1
+            )
+    elif render_mode in ["RGB+D+S+F", "RGB+ED+S+F"]:
+        colors = torch.cat((colors, depths[..., None], smts, flows), dim=-1)
+        if backgrounds is not None:
+            backgrounds = torch.cat(
+                [backgrounds, 
+                 torch.zeros(C, 1+smts.shape[-1]+flows.shape[-1], device=backgrounds.device)], dim=-1
+            )
+    elif render_mode == 'RGB':  # RGB
         pass
+    else:
+        raise NotImplementedError
+
 
     # Identify intersecting tiles
     tile_width = math.ceil(width / float(tile_size))
