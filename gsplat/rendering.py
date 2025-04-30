@@ -41,7 +41,7 @@ def rasterization(
     packed: bool = True,
     tile_size: int = 16,
     backgrounds: Optional[Tensor] = None,
-    render_mode: Literal["RGB", "D", "ED", "RGB+D", "RGB+ED"] = "RGB",
+    render_mode: Literal["RGB", "D", "ED", "RGB+D", "RGB+ED", "RGB+F"] = "RGB",
     sparse_grad: bool = False,
     absgrad: bool = False,
     rasterize_mode: Literal["classic", "antialiased"] = "classic",
@@ -479,6 +479,12 @@ def rasterization(
             backgrounds = torch.cat(
                 [backgrounds, 
                  torch.zeros(C, 1+smts.shape[-1]+flows.shape[-1], device=backgrounds.device)], dim=-1
+            )
+    elif render_mode == "RGB+F":
+        colors = torch.cat((colors, flows), dim=-1)
+        if backgrounds is not None:
+            backgrounds = torch.cat(
+                [backgrounds, torch.zeros(C, flows.shape[-1], device=backgrounds.device)], dim=-1
             )
     elif render_mode == 'RGB':  # RGB
         pass
