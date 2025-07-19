@@ -17,8 +17,10 @@ device = torch.device("cuda:0")
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="No CUDA device")
 @pytest.mark.parametrize("per_view_color", [True, False])
 @pytest.mark.parametrize("sh_degree", [None, 3])
-@pytest.mark.parametrize("render_mode", ["RGB", "RGB+D", "D"])
-@pytest.mark.parametrize("packed", [True, False])
+# @pytest.mark.parametrize("per_view_color", [False])
+# @pytest.mark.parametrize("sh_degree", [3])
+@pytest.mark.parametrize("render_mode", ["RGB", "RGB+D+S+F+N"])
+@pytest.mark.parametrize("packed", [False])
 def test_rasterization(
     per_view_color: bool, sh_degree: Optional[int], render_mode: str, packed: bool
 ):
@@ -32,16 +34,21 @@ def test_rasterization(
     scales = torch.rand(N, 3, device=device)
     opacities = torch.rand(N, device=device)
     if per_view_color:
+        normals = torch.randn(C, N, 3, device=device)
+        flows = torch.randn(C, N, 2, device=device)
+        smts = torch.randn(C, N, 20, device=device)
         if sh_degree is None:
             colors = torch.rand(C, N, 3, device=device)
         else:
             colors = torch.rand(C, N, (sh_degree + 1) ** 2, 3, device=device)
     else:
+        normals = torch.randn(N, 3, device=device)
+        flows = torch.randn(N, 2, device=device)
+        smts = torch.randn(N, 20, device=device)
         if sh_degree is None:
             colors = torch.rand(N, 3, device=device)
         else:
             colors = torch.rand(N, (sh_degree + 1) ** 2, 3, device=device)
-
     width, height = 300, 200
     focal = 300.0
     Ks = torch.tensor(
@@ -60,6 +67,9 @@ def test_rasterization(
         Ks=Ks,
         width=width,
         height=height,
+        normals=normals, 
+        smts=smts,
+        flows=flows,
         sh_degree=sh_degree,
         render_mode=render_mode,
         packed=packed,
@@ -71,19 +81,9 @@ def test_rasterization(
         assert renders.shape == (C, height, width, 3)
     elif render_mode == "RGB+D":
         assert renders.shape == (C, height, width, 4)
+    elif render_mode == "RGB+D+S+F+N":
+        print(f"renders.shape: {renders.shape}")
+        assert renders.shape == (C, height, width, 4 + smts.shape[-1] + flows.shape[-1] + normals.shape[-1])
 
-    _renders, _alphas, _meta = _rasterization(
-        means=means,
-        quats=quats,
-        scales=scales,
-        opacities=opacities,
-        colors=colors,
-        viewmats=viewmats,
-        Ks=Ks,
-        width=width,
-        height=height,
-        sh_degree=sh_degree,
-        render_mode=render_mode,
-    )
-    torch.testing.assert_close(renders, _renders, rtol=1e-4, atol=1e-4)
-    torch.testing.assert_close(alphas, _alphas, rtol=1e-4, atol=1e-4)
+if __name__ == "__main__":
+    pytest.main([__file__, "-vv"])

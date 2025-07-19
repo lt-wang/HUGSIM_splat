@@ -31,8 +31,10 @@ def rasterization(
     Ks: Tensor,  # [C, 3, 3]
     width: int,
     height: int,
+    normals: Tensor = None, # [(C,) N, 3] - 添加normal参数
     smts: Tensor = None, # [(C,) N, S]
     flows: Tensor = None, # [(C,) N, 2]
+    material: Tensor = None, # [(C,) N, E]  ## 添加额外参数
     near_plane: float = 0.01,
     far_plane: float = 1e10,
     radius_clip: float = 0.0,
@@ -251,6 +253,12 @@ def rasterization(
             assert (
                 colors.dim() == 3
             ), "Distributed mode only supports per-Gaussian colors."
+    
+    # 添加normals参数验证
+    if normals is not None:
+        assert (normals.dim() == 2 and normals.shape == (N, 3)) or (
+            normals.dim() == 3 and normals.shape[:2] == (C, N) and normals.shape[2] == 3
+        ), f"Expected normals shape [N, 3] or [C, N, 3], got {normals.shape}"
 
     if absgrad:
         assert not distributed, "AbsGrad is not supported in distributed mode."
@@ -486,6 +494,22 @@ def rasterization(
             backgrounds = torch.cat(
                 [backgrounds, torch.zeros(C, flows.shape[-1], device=backgrounds.device)], dim=-1
             )
+    elif render_mode in ["RGB+D+S+F+N", "RGB+ED+S+F+N"]:
+        # tmp =  [colors, depths[..., None], smts, flows,normals]
+        # print("Tensor shapes before cat:", [t.shape for t in tmp])
+        colors = torch.cat((colors, depths[..., None], smts, flows,normals), dim=-1)
+        if backgrounds is not None:
+            backgrounds = torch.cat(
+                [backgrounds, 
+                 torch.zeros(C, 1+smts.shape[-1]+flows.shape[-1]+normals.shape[-1], device=backgrounds.device)], dim=-1
+            )
+    elif render_mode in ["RGB+D+S+F+N+M", "RGB+ED+S+F+N+M"]:
+        colors = torch.cat((colors, depths[..., None], smts, flows,normals,material), dim=-1)
+        if backgrounds is not None:
+            backgrounds = torch.cat(
+                [backgrounds, 
+                 torch.zeros(C, 1+smts.shape[-1]+flows.shape[-1]+normals.shape[-1]+material.shape[-1], device=backgrounds.device)], dim=-1
+            )
     elif render_mode == 'RGB':  # RGB
         pass
     else:
@@ -650,6 +674,7 @@ def _rasterization(
         ), colors.shape
         assert (sh_degree + 1) ** 2 <= colors.shape[-2], colors.shape
 
+    
     # Project Gaussians to 2D.
     # The results are with shape [C, N, ...]. Only the elements with radii > 0 are valid.
     covars, _ = _quat_scale_to_covar_preci(quats, scales, True, False, triu=False)
