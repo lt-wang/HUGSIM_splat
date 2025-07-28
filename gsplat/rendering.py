@@ -494,6 +494,13 @@ def rasterization(
             backgrounds = torch.cat(
                 [backgrounds, torch.zeros(C, flows.shape[-1], device=backgrounds.device)], dim=-1
             )
+    elif render_mode in ["RGB+ED+S+N", "RGB+ED+S+N"]:
+        colors = torch.cat((colors, depths[..., None], smts,normals), dim=-1)
+        if backgrounds is not None:
+            backgrounds = torch.cat(
+                [backgrounds, 
+                 torch.zeros(C, 1+smts.shape[-1]+normals.shape[-1], device=backgrounds.device)], dim=-1
+            )
     elif render_mode in ["RGB+D+S+F+N", "RGB+ED+S+F+N"]:
         # tmp =  [colors, depths[..., None], smts, flows,normals]
         # print("Tensor shapes before cat:", [t.shape for t in tmp])
