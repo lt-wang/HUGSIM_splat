@@ -35,6 +35,7 @@ def rasterization(
     smts: Tensor = None, # [(C,) N, S]
     flows: Tensor = None, # [(C,) N, 2]
     material: Tensor = None, # [(C,) N, E]  ## 添加额外参数
+    heights: Tensor = None, # [(C,) N, 1]
     near_plane: float = 0.01,
     far_plane: float = 1e10,
     radius_clip: float = 0.0,
@@ -509,6 +510,15 @@ def rasterization(
             backgrounds = torch.cat(
                 [backgrounds, 
                  torch.zeros(C, 1+smts.shape[-1]+flows.shape[-1]+normals.shape[-1], device=backgrounds.device)], dim=-1
+            )
+    elif render_mode in ["RGB+D+S+F+N+H", "RGB+ED+S+F+N+H"]:
+        # tmp =  [colors, depths[..., None], smts, flows,normals]
+        # print("Tensor shapes before cat:", [t.shape for t in tmp])
+        colors = torch.cat((colors, depths[..., None], smts, flows,normals,heights), dim=-1)
+        if backgrounds is not None:
+            backgrounds = torch.cat(
+                [backgrounds, 
+                 torch.zeros(C, 1+smts.shape[-1]+flows.shape[-1]+normals.shape[-1]+heights.shape[-1], device=backgrounds.device)], dim=-1
             )
     elif render_mode in ["RGB+D+S+F+N+M", "RGB+ED+S+F+N+M"]:
         colors = torch.cat((colors, depths[..., None], smts, flows,normals,material), dim=-1)
